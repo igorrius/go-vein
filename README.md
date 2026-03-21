@@ -122,3 +122,22 @@ The `On` allocation (1/publish) is the goroutine stack. The `OnC` path is zero-a
 - Subscriber list stored behind `atomic.Pointer` (copy-on-write); `Publish` reads it lock-free
 - `Subscription[T]` is a value type; `subscriber[T]` state updated via lock-free CAS
 - Non-blocking channel send with `select { case ch <- e: default: dropped++ }`
+## Contributing
+
+This repository uses a CI gating policy motivated by the `PR and main CI` workflow.
+
+- Pull requests are required to run GitHub Actions checks and pass before merging to `main`.
+- Branch protection should enforce these status checks (configure in GitHub repo settings for `main`).
+- The workflow file is located at `.github/workflows/pr-main-ci.yml`.
+- If you update tests or workflows, ensure the new checks are added to protection rules.
+
+### PR expectations
+
+- Open PR with a clear title and description.
+- Ensure all tests pass locally via `go test ./...` before pushing.
+- Address CI failures promptly; do not merge if status checks are failing.
+
+### Branch protection policy
+
+- `main` requires status check `PR and main CI` to pass.
+- Optional: require two approving reviews and no stale checks on merge.

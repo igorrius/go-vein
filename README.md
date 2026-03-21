@@ -61,18 +61,21 @@ sub.On(func(e OrderPlaced) { /* also runs concurrently */ })
 
 ### OnC — channel delivery
 
-`OnC` returns a buffered `<-chan T` (64 slots). Overflow events are dropped silently.
-Use `select` + a done channel for clean shutdown; the channel is not closed on `Unsubscribe`.
+Each `OnC` call returns a new buffered `<-chan T` (64 slots). Published events fan out to every channel created from the same subscription. Overflow events are dropped silently per channel.
+Use `select` + a done channel for clean shutdown; channels are not closed on `Unsubscribe`.
 
 ```go
 sub := vein.Subscribe[OrderPlaced]()
 ch := sub.OnC()
+auditCh := sub.OnC()
 
 go func() {
     for {
         select {
         case e := <-ch:
             fmt.Println("channel:", e.ID)
+        case e := <-auditCh:
+            fmt.Println("audit:", e.ID)
         case <-ctx.Done():
             sub.Unsubscribe()
             return

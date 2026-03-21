@@ -32,8 +32,9 @@
 //
 //   - [Subscription.On]: each publish fires the handler in a new goroutine.
 //     Multiple On registrations on the same Subscription all fire concurrently.
-//   - [Subscription.OnC]: events are sent to a buffered channel (64 slots).
-//     A full buffer causes the event to be dropped; see [Subscription.DroppedEvents].
+//   - [Subscription.OnC]: each call creates a buffered channel listener (64 slots).
+//     Publishes fan out to all registered channels. A full buffer causes that
+//     channel delivery to be dropped; see [Subscription.DroppedEvents].
 //   - [Dispatcher.PublishTo] / [Publish] return immediately — they never block.
 //
 // # Performance

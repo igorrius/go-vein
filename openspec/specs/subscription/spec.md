@@ -26,7 +26,7 @@ TBD - created by archiving change lightweight-message-bus. Update Purpose after 
 - **THEN** both handlers start before either finishes (total wall time < sum of individual times)
 
 ### Requirement: OnC returns a non-blocking receive channel
-`Subscription[T].OnC()` SHALL return a `<-chan T` that receives published events. The channel SHALL be buffered (default buffer ≥ 1). If the buffer is full at publish time, the event SHALL be silently dropped rather than blocking the publisher.
+`Subscription[T].OnC()` SHALL return a buffered `<-chan T` that receives published events. Each call to `OnC()` on the same subscription SHALL create and register a new channel listener. Every registered channel listener SHALL receive future published events independently. If any channel buffer is full at publish time, delivery to that channel SHALL be silently dropped rather than blocking the publisher.
 
 #### Scenario: Channel receives published event
 - **WHEN** `ch := sub.OnC()` and `MyEvent{ID: 7}` is published
@@ -34,11 +34,15 @@ TBD - created by archiving change lightweight-message-bus. Update Purpose after 
 
 #### Scenario: Full channel does not block publisher
 - **WHEN** the channel returned by `OnC()` is full and `Publish` is called
-- **THEN** `Publish` returns immediately without blocking; the event is dropped
+- **THEN** `Publish` returns immediately without blocking; delivery to that channel is dropped
 
-#### Scenario: OnC called multiple times returns the same channel
+#### Scenario: OnC called multiple times returns distinct channels
 - **WHEN** `sub.OnC()` is called twice on the same `Subscription`
-- **THEN** both calls return the same channel instance
+- **THEN** the two calls return different channel instances
+
+#### Scenario: Multiple OnC channels all receive the same event
+- **WHEN** two channels are created via `ch1 := sub.OnC()` and `ch2 := sub.OnC()` and an event is published
+- **THEN** both `ch1` and `ch2` receive that event independently
 
 ### Requirement: Unsubscribe removes the subscription from the dispatcher
 `Subscription[T].Unsubscribe()` SHALL remove the subscription from the dispatcher so that future publishes do not reach its handlers or channel.

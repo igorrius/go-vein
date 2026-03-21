@@ -7,8 +7,8 @@ const defaultChanBuf = 64
 // subscriberData is an immutable snapshot of a subscriber's delivery configuration.
 // It is replaced atomically on every On/OnC call (copy-on-write).
 type subscriberData[T any] struct {
-	on []func(T)
-	ch chan T
+	on  []func(T)
+	chs []chan T
 }
 
 // subscriber is a single subscription node held inside a topic.
@@ -28,7 +28,9 @@ func (s *subscriber[T]) addHandler(fn func(T)) {
 			on := make([]func(T), len(old.on)+1)
 			copy(on, old.on)
 			on[len(old.on)] = fn
-			next = &subscriberData[T]{on: on, ch: old.ch}
+			chs := make([]chan T, len(old.chs))
+			copy(chs, old.chs)
+			next = &subscriberData[T]{on: on, chs: chs}
 		}
 		if s.data.CompareAndSwap(old, next) {
 			return
@@ -36,25 +38,25 @@ func (s *subscriber[T]) addHandler(fn func(T)) {
 	}
 }
 
-// getOrCreateChan lazily initialises the delivery channel using a lock-free COW update.
-// Concurrent calls are safe; only one channel is ever created.
-func (s *subscriber[T]) getOrCreateChan(buf int) chan T {
+// addChan creates and registers a new delivery channel using a lock-free COW update.
+func (s *subscriber[T]) addChan(buf int) chan T {
+	ch := make(chan T, buf)
 	for {
 		old := s.data.Load()
-		if old != nil && old.ch != nil {
-			return old.ch
-		}
-		ch := make(chan T, buf)
 		var next *subscriberData[T]
 		if old == nil {
-			next = &subscriberData[T]{ch: ch}
+			next = &subscriberData[T]{chs: []chan T{ch}}
 		} else {
-			next = &subscriberData[T]{on: old.on, ch: ch}
+			on := make([]func(T), len(old.on))
+			copy(on, old.on)
+			chs := make([]chan T, len(old.chs)+1)
+			copy(chs, old.chs)
+			chs[len(old.chs)] = ch
+			next = &subscriberData[T]{on: on, chs: chs}
 		}
 		if s.data.CompareAndSwap(old, next) {
 			return ch
 		}
-		// Another goroutine won the CAS; retry — next Load will see their channel.
 	}
 }
 
@@ -121,10 +123,10 @@ func (t *topic[T]) publish(event T) {
 			fn := fn // per-iteration capture (safe in all Go versions)
 			go fn(event)
 		}
-		// Non-blocking channel send; drop and count if buffer is full.
-		if d.ch != nil {
+		// Non-blocking channel sends; drop and count per full channel.
+		for _, ch := range d.chs {
 			select {
-			case d.ch <- event:
+			case ch <- event:
 			default:
 				s.dropped.Add(1)
 			}

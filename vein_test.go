@@ -1,12 +1,12 @@
 package vein_test
 
 import (
-"sync"
-"sync/atomic"
-"testing"
-"time"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
 
-vein "github.com/igorrius/go-vein"
+	vein "github.com/igorrius/go-vein"
 )
 
 type EventA struct{ Value int }
@@ -64,13 +64,33 @@ func TestOnCChannelReceivesEvent(t *testing.T) {
 	}
 }
 
-func TestOnCReturnsSameChannel(t *testing.T) {
+func TestOnCReturnsDistinctChannels(t *testing.T) {
 	var d vein.Dispatcher
 	sub := vein.SubscribeTo[EventA](&d)
 	ch1 := sub.OnC()
 	ch2 := sub.OnC()
-	if ch1 != ch2 {
-		t.Fatal("OnC must return the same channel on repeated calls")
+	if ch1 == ch2 {
+		t.Fatal("OnC must return distinct channels on repeated calls")
+	}
+}
+
+func TestMultipleOnCChannelsAllReceive(t *testing.T) {
+	var d vein.Dispatcher
+	sub := vein.SubscribeTo[EventA](&d)
+	ch1 := sub.OnC()
+	ch2 := sub.OnC()
+
+	vein.PublishTo(&d, EventA{Value: 9})
+
+	for i, ch := range []<-chan EventA{ch1, ch2} {
+		select {
+		case e := <-ch:
+			if e.Value != 9 {
+				t.Fatalf("channel %d expected Value=9, got %d", i+1, e.Value)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("timeout: channel %d received nothing", i+1)
+		}
 	}
 }
 
@@ -139,6 +159,37 @@ func TestOnCFullBufferDropsEvent(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("Publish blocked on full OnC channel")
+	}
+}
+
+func TestOnCFullBufferDoesNotBlockOtherChannels(t *testing.T) {
+	var d vein.Dispatcher
+	sub := vein.SubscribeTo[EventA](&d)
+	_ = sub.OnC()
+	for i := 0; i < 64; i++ {
+		vein.PublishTo(&d, EventA{Value: i})
+	}
+	receivingCh := sub.OnC()
+
+	done := make(chan struct{})
+	go func() {
+		vein.PublishTo(&d, EventA{Value: 123})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Publish blocked when one OnC channel was full")
+	}
+
+	select {
+	case e := <-receivingCh:
+		if e.Value != 123 {
+			t.Fatalf("expected Value=123 on receiving channel, got %d", e.Value)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout: receiving channel did not get published event")
 	}
 }
 

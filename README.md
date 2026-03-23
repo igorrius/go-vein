@@ -109,10 +109,11 @@ Benchmarks on Intel i7-1260P (amd64):
 
 | Scenario | ns/op | allocs/op |
 |---|---|---|
-| Publish, no subscribers | 11 | 0 |
-| Publish → OnC channel | 50 | 0 |
-| Publish → On callback | 268 | 1 |
-| Subscribe + Unsubscribe | 133 | 5 |
+| Publish, no subscribers | 9 | 0 |
+| Publish → OnC channel | 28 | 0 |
+| Publish → OnC channel (10 fan-out) | 132 | 0 |
+| Publish → On callback | 240 | 1 |
+| Subscribe + Unsubscribe | 103 | 5 |
 
 The `On` allocation (1/publish) is the goroutine stack. The `OnC` path is zero-alloc.
 

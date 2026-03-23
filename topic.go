@@ -124,12 +124,16 @@ func (t *topic[T]) publish(event T) {
 			go fn(event)
 		}
 		// Non-blocking channel sends; drop and count per full channel.
+		var dropped uint64
 		for _, ch := range d.chs {
 			select {
 			case ch <- event:
 			default:
-				s.dropped.Add(1)
+				dropped++
 			}
+		}
+		if dropped > 0 {
+			s.dropped.Add(dropped)
 		}
 	}
 }

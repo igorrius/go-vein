@@ -44,6 +44,34 @@ func BenchmarkPublish_OnCChannel(b *testing.B) {
 	}
 }
 
+func BenchmarkPublish_OnCChannel_Multiple(b *testing.B) {
+	var d vein.Dispatcher
+	sub := vein.SubscribeTo[benchEvent](&d)
+	const numChans = 10
+	stop := make(chan struct{})
+	for range numChans {
+		ch := sub.OnC()
+		go func() {
+			for {
+				select {
+				case <-ch:
+				case <-stop:
+					return
+				}
+			}
+		}()
+	}
+	b.Cleanup(func() {
+		sub.Unsubscribe()
+		close(stop)
+	})
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		vein.PublishTo(&d, benchEvent{Payload: int64(i)})
+	}
+}
+
 func BenchmarkPublish_NoSubscribers(b *testing.B) {
 	var d vein.Dispatcher
 	b.ReportAllocs()
